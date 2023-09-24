@@ -3,4 +3,4 @@
 **/__pycache__/
 /venv/
 /*debug.py
-/data
+/data/*.jsonl
