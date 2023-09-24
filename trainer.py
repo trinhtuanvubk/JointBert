@@ -1,7 +1,6 @@
 import os
 import logging
 from tqdm import tqdm, trange
-
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
@@ -48,6 +47,48 @@ def transform(tokenizer, sentences, list_slots, list_intents, dict_tags, dict_in
         torch.tensor([[0] * len(list_pre['input_ids'][0]) for _ in range(len(sentences))])
     )
 
+
+# def prepare_label(input_ids, list_slots, list_intents, dict_tags, dict_intents):
+#     new_list_slots = []
+#     list_ids_slots = []
+#     list_ids_intents = []
+#     # list_pre = tokenizer([sent.strip() for sent in sentences], padding=True, truncation=True, add_special_tokens=True)
+#     for i in range(input_ids.shape[0]):
+#         list_tokens = tokenizer.convert_ids_to_tokens(input_ids[i])
+#         list_index_g = [index for index, i in enumerate(list_tokens) if 'Ġ' in i]
+#         list_index_g = [1] + list_index_g
+#         new_slots = []
+#         for index, token in enumerate(list_tokens):
+#             if index not in list_index_g:
+#                 if token in ['<s>', '</s>', '<pad>']:
+#                     ner_tag = 'O'
+#                 else:
+#                     tmp = [i for i in list_index_g if i < index][-1]
+#                     ner_tag = list_slots[i][list_index_g.index(tmp)].replace("B-", "I-")
+#             else:
+#                 ner_tag = list_slots[i][list_index_g.index(index)]
+#             new_slots.append(ner_tag)
+#         new_list_slots.append(new_slots)
+
+#     for slots in new_list_slots:
+#         list_ids_slots.append([dict_tags[i] for i in slots])
+    
+#     for intent in list_intents:
+#         list_ids_intents.append(dict_intents[intent])
+
+#     return (
+#         torch.tensor(list_ids_slots),
+#         torch.tensor(list_ids_intents),
+#         torch.tensor([[0] * len([0]) for _ in range(len(sentences))])
+#     )
+
+
+# def transform(tokenizer, sentences):
+#     list_pre = tokenizer([sent.strip() for sent in sentences], padding=True, truncation=True, add_special_tokens=True)
+#     return (
+#         torch.tensor(list_pre['input_ids']),
+#         torch.tensor(list_pre['attention_mask'])
+#     )
 
 class Trainer(object):
     def __init__(self, args, train_dataset=None, test_dataset=None):
@@ -112,14 +153,43 @@ class Trainer(object):
             for step, batch in enumerate(epoch_iterator):
                 self.model.train()
                 batch = tuple(t.to(self.device) for t in batch)  # GPU or CPU
+                input_ids, attention_mask, slot_labels_ids, intent_label_ids, token_type_ids = batch
+                inputs = {'input_ids': input_ids,
+                        'attention_mask': attention_mask}
 
-                inputs = {'input_ids': batch[0],
-                        'attention_mask': batch[1],
-                        'intent_label_ids': batch[3],
-                        'slot_labels_ids': batch[2],
-                        'token_type_ids': batch[4]}
-                outputs = self.model(**inputs)
-                loss = outputs[0]
+                intent_logits, slot_logits = self.model(**inputs)
+
+                total_loss = 0
+                # 1. Intent Softmax
+                if intent_label_ids is not None:
+                    if self.model.num_intent_labels == 1:
+                        intent_loss_fct = nn.MSELoss()
+                        intent_loss = intent_loss_fct(intent_logits.view(-1), intent_label_ids.view(-1))
+                    else:
+                        intent_loss_fct = torch.nn.CrossEntropyLoss()
+                        intent_loss = intent_loss_fct(intent_logits.view(-1, self.model.num_intent_labels), intent_label_ids.view(-1))
+                    total_loss += intent_loss
+
+                # 2. Slot Softmax
+                if slot_labels_ids is not None:
+                    if self.model.args.use_crf:
+                        slot_loss = self.model.crf(slot_logits, slot_labels_ids, mask=attention_mask.byte(), reduction='mean')
+                        slot_loss = -1 * slot_loss  # negative log-likelihood
+                    else:
+                        slot_loss_fct = torch.nn.CrossEntropyLoss(ignore_index=self.model.args.ignore_index)
+                        # Only keep active parts of the loss
+                        if attention_mask is not None:
+                            active_loss = attention_mask.view(-1) == 1
+                            active_logits = slot_logits.view(-1, self.model.num_slot_labels)[active_loss]
+                            active_labels = slot_labels_ids.view(-1)[active_loss]
+                            slot_loss = slot_loss_fct(active_logits, active_labels)
+                        else:
+                            slot_loss = slot_loss_fct(slot_logits.view(-1, self.model.num_slot_labels), slot_labels_ids.view(-1))
+                    
+                    total_loss += self.model.args.slot_loss_coef * slot_loss
+
+                loss = total_loss
+
 
                 if self.args.gradient_accumulation_steps > 1:
                     loss = loss / self.args.gradient_accumulation_steps
@@ -171,13 +241,47 @@ class Trainer(object):
         for batch in tqdm(eval_dataloader, desc="Evaluating"):
             batch = tuple(t.to(self.device) for t in batch)
             with torch.no_grad():
-                inputs = {'input_ids': batch[0],
-                            'attention_mask': batch[1],
-                            'intent_label_ids': batch[3],
-                            'slot_labels_ids': batch[2],
-                            'token_type_ids': batch[4]}
-                outputs = self.model(**inputs)
-                tmp_eval_loss, (intent_logits, slot_logits) = outputs[:2]
+                # inputs = {'input_ids': batch[0],
+                #             'attention_mask': batch[1],
+                #             'intent_label_ids': batch[3],
+                #             'slot_labels_ids': batch[2],
+                #             'token_type_ids': batch[4]}
+                # outputs = self.model(**inputs)
+                # tmp_eval_loss, (intent_logits, slot_logits) = outputs[:2]
+                input_ids, attention_mask, slot_labels_ids, intent_label_ids, token_type_ids = batch
+                inputs = {'input_ids': input_ids,
+                        'attention_mask': attention_mask}
+
+                intent_logits, slot_logits = self.model(**inputs)
+
+                tmp_eval_loss = 0
+                # 1. Intent Softmax
+                if intent_label_ids is not None:
+                    if self.model.num_intent_labels == 1:
+                        intent_loss_fct = nn.MSELoss()
+                        intent_loss = intent_loss_fct(intent_logits.view(-1), intent_label_ids.view(-1))
+                    else:
+                        intent_loss_fct = torch.nn.CrossEntropyLoss()
+                        intent_loss = intent_loss_fct(intent_logits.view(-1, self.model.num_intent_labels), intent_label_ids.view(-1))
+                    tmp_eval_loss += intent_loss
+
+                # 2. Slot Softmax
+                if slot_labels_ids is not None:
+                    if self.model.args.use_crf:
+                        slot_loss = self.model.crf(slot_logits, slot_labels_ids, mask=attention_mask.byte(), reduction='mean')
+                        slot_loss = -1 * slot_loss  # negative log-likelihood
+                    else:
+                        slot_loss_fct = torch.nn.CrossEntropyLoss(ignore_index=self.model.args.ignore_index)
+                        # Only keep active parts of the loss
+                        if attention_mask is not None:
+                            active_loss = attention_mask.view(-1) == 1
+                            active_logits = slot_logits.view(-1, self.model.num_slot_labels)[active_loss]
+                            active_labels = slot_labels_ids.view(-1)[active_loss]
+                            slot_loss = slot_loss_fct(active_logits, active_labels)
+                        else:
+                            slot_loss = slot_loss_fct(slot_logits.view(-1, self.model.num_slot_labels), slot_labels_ids.view(-1))
+                    
+                    tmp_eval_loss += self.model.args.slot_loss_coef * slot_loss
 
                 eval_loss += tmp_eval_loss.mean().item()
             nb_eval_steps += 1
@@ -185,11 +289,11 @@ class Trainer(object):
             # Intent prediction
             if intent_preds is None:
                 intent_preds = intent_logits.detach().cpu().numpy()
-                out_intent_label_ids = inputs['intent_label_ids'].detach().cpu().numpy()
+                out_intent_label_ids = intent_label_ids.detach().cpu().numpy()
             else:
                 intent_preds = np.append(intent_preds, intent_logits.detach().cpu().numpy(), axis=0)
                 out_intent_label_ids = np.append(
-                    out_intent_label_ids, inputs['intent_label_ids'].detach().cpu().numpy(), axis=0)
+                    out_intent_label_ids, intent_label_ids.detach().cpu().numpy(), axis=0)
 
             # Slot prediction
             if slot_preds is None:
@@ -199,14 +303,14 @@ class Trainer(object):
                 else:
                     slot_preds = slot_logits.detach().cpu().numpy().tolist()
 
-                out_slot_labels_ids = inputs["slot_labels_ids"].detach().cpu().numpy().tolist()
+                out_slot_labels_ids = slot_labels_ids.detach().cpu().numpy().tolist()
             else:
                 if self.args.use_crf:
                     slot_preds.extend(np.array(self.model.crf.decode(slot_logits)).tolist())
                 else:
                     slot_preds.extend(slot_logits.detach().cpu().numpy().tolist())
 
-                out_slot_labels_ids.extend(inputs["slot_labels_ids"].detach().cpu().numpy().tolist())
+                out_slot_labels_ids.extend(slot_labels_ids.detach().cpu().numpy().tolist())
 
         eval_loss = eval_loss / nb_eval_steps
         results = {

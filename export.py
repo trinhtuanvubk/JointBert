@@ -53,6 +53,7 @@ dict_intents = {i: intent for i, intent in enumerate(intent_label_lst)}
 slot_label_lst = get_slot_labels(args)
 dict_tags = {i: tag for i, tag in enumerate(slot_label_lst)}
 model = JointRoberta.from_pretrained(args.model_dir, args, intent_label_lst=intent_label_lst, slot_label_lst=slot_label_lst).to(device)
+model.eval()
 # export
 torch.onnx.export(
     model, 

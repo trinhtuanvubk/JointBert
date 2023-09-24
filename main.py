@@ -32,7 +32,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--model_dir", default=None, required=True, type=str, help="Path to save, load model")
+    parser.add_argument("--model_dir", default="/home/sangdt/research/JointBert/ckpt_done", type=str, help="Path to save, load model")
     parser.add_argument("--data_dir", default="/home/sangdt/research/JointBert/data", type=str, help="The input data dir")
     parser.add_argument("--intent_label_file", default="./processed_data/intent_label.txt", type=str, help="Intent Label file")
     parser.add_argument("--slot_label_file", default="./processed_data/slot_label.txt", type=str, help="Slot Label file")
@@ -74,3 +74,6 @@ if __name__ == '__main__':
 
     args.model_name_or_path = MODEL_PATH_MAP[args.model_type]
     main(args)
+
+
+    # python3 main.py --do_train  --model_dir=./ckpt_test
