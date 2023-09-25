@@ -2,7 +2,7 @@
 
 ### Data
 
-- Put your data in `data` folder. It shoule consist of 2 files: `train_slots.jsonl` and `test_slots.jsonl`
+- Put your data in `data` folder. It should consist of 2 files: `train_slots.jsonl` and `test_slots.jsonl`
 - A line sample in each file: 
 '{"text": "to make a payment", "tokens": ["to", "make", "a", "payment"], "intention": "payment", "slots": ["O", "O", "O", "B-PAYMENT"]}'
 
