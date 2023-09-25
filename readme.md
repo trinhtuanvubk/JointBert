@@ -1,5 +1,12 @@
 ## JointBERT
 
+### Environment
+```
+conda create -n jointbert python=3.8
+conda activate jointbert
+pip3 install -r requirements.txt
+```
+
 ### Data
 
 - Put your data in `data` folder. It should consist of 2 files: `train_slots.jsonl` and `test_slots.jsonl`
