@@ -44,7 +44,7 @@ def post_processing(input_ids, slots):
     return list_raw_slots
 
 device = torch.device("cpu")
-sentences = ["I hit a customer", "I made a call at the hotel"]
+sentences = ["I hit a customer", "I would make a complaint"]
 inputs = tokenizer([sent.strip() for sent in sentences], add_special_tokens=True, return_tensors='pt', padding=True, truncation=True)
 # inputs['input_ids'] = inputs['input_ids'].to(device)
 # inputs['attention_mask'] = inputs['attention_mask'].to(device)
