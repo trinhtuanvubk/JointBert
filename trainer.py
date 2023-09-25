@@ -44,8 +44,8 @@ def transform(tokenizer, sentences, list_slots, list_intents, dict_tags, dict_in
         torch.tensor(list_pre['input_ids']),
         torch.tensor(list_pre['attention_mask']),
         torch.tensor(list_ids_slots),
-        torch.tensor(list_ids_intents),
-        torch.tensor([[0] * len(list_pre['input_ids'][0]) for _ in range(len(sentences))])
+        torch.tensor(list_ids_intents)
+        # torch.tensor([[0] * len(list_pre['input_ids'][0]) for _ in range(len(sentences))])
     )
 
 
@@ -116,8 +116,8 @@ class Trainer(object):
                 inputs = {'input_ids': batch[0],
                         'attention_mask': batch[1],
                         'intent_label_ids': batch[3],
-                        'slot_labels_ids': batch[2],
-                        'token_type_ids': batch[4]}
+                        'slot_labels_ids': batch[2]}
+                        # 'token_type_ids': batch[4]}
                 outputs = self.model(**inputs)
                 loss = outputs[0]
 
@@ -174,8 +174,8 @@ class Trainer(object):
                 inputs = {'input_ids': batch[0],
                             'attention_mask': batch[1],
                             'intent_label_ids': batch[3],
-                            'slot_labels_ids': batch[2],
-                            'token_type_ids': batch[4]}
+                            'slot_labels_ids': batch[2]}
+                            # 'token_type_ids': batch[4]}
                 outputs = self.model(**inputs)
                 tmp_eval_loss, (intent_logits, slot_logits) = outputs[:2]
 
