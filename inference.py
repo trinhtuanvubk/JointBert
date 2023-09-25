@@ -6,33 +6,40 @@ import argparse
 import numpy as np
 
 def post_processing(input_ids, slots):
-    list_tokens = tokenizer.convert_ids_to_tokens(input_ids)
-    list_index_g = [index for index, i in enumerate(list_tokens) if 'Ġ' in i]
-    list_index_g = [1] + list_index_g
-    raw_slots = []
-    for index, token in enumerate(list_tokens):
-        if index in list_index_g:
-            raw_slots.append(slots[index])
-    return raw_slots
+    list_raw_slots = []
+    for index in range(input_ids.shape[0]):
+        list_tokens = tokenizer.convert_ids_to_tokens(input_ids[index])
+        list_index_g = [index for index, i in enumerate(list_tokens) if 'Ġ' in i]
+        list_index_g = [1] + list_index_g
+        raw_slots = []
+        for j, token in enumerate(list_tokens):
+            if j in list_index_g:
+                raw_slots.append(slots[index][j])
+        list_raw_slots.append(raw_slots)
+    return list_raw_slots
 
-def infer(sentence, tokenizer, model, dict_intents, dict_tags, device):
-    inputs = tokenizer([sentence.strip()], add_special_tokens=True, return_tensors='pt')
+def infer(sentences, tokenizer, model, dict_intents, dict_tags, device):
+    if isinstance(sentences, str):
+        sentences = [sentences]
+    inputs = tokenizer([sent.strip() for sent in sentences], add_special_tokens=True, return_tensors='pt', padding=True, truncation=True)
     inputs['input_ids'] = inputs['input_ids'].to(device)
     inputs['attention_mask'] = inputs['attention_mask'].to(device)
     with torch.no_grad():
         outputs = model.predict(**inputs)
         intent_logits, slot_logits = outputs
         intent_preds = np.argmax(intent_logits.detach().cpu().numpy(), axis=1).tolist()
-        slot_preds = np.array(model.crf.decode(slot_logits)).tolist()
-    intention =  [dict_intents[i] for i in intent_preds][0]
-    tmp_slots = [dict_tags[i] for i in slot_preds[0]]
-    slots = post_processing(inputs['input_ids'][0], tmp_slots)
-    return {
+        # slot_preds = np.array(model.crf.decode(slot_logits)).tolist()
+        slot_preds =  [np.argmax(slot_pred, axis=1) for slot_pred in slot_logits.detach().cpu().numpy()]
+    intention =  [dict_intents[i] for i in intent_preds]
+    tmp_slots = [[dict_tags[i] for i in slot_pred] for slot_pred in slot_preds]
+    slots = post_processing(inputs['input_ids'], tmp_slots)
+    return [{
         "tokens": sentence.strip().split(),
         "intention": intention,
-        "slots": slots
-    }
+        "slots": slot
+    } for sentence, intention, slot in zip(sentences, intention, slots)]
     
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -62,5 +69,5 @@ if __name__ == '__main__':
     model = JointRoberta.from_pretrained(args.model_dir, args, intent_label_lst=intent_label_lst, slot_label_lst=slot_label_lst).to(device)
     tokenizer = RobertaTokenizer.from_pretrained("roberta-base")
 
-    result = infer('customer service', tokenizer, model, dict_intents, dict_tags, device)
+    result = infer(['customer service', 'I want to book this hotel'], tokenizer, model, dict_intents, dict_tags, device)
     print(result)
