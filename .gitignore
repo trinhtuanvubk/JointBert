@@ -1,6 +1,7 @@
-/ckpt/
+/ckpt*/
 .vscode/
 **/__pycache__/
 /venv/
 /*debug.py
 /data/*.jsonl
+/trash*.py
