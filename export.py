@@ -49,7 +49,8 @@ class JointRobertaWrapper(torch.nn.Module):
         # slot_preds = np.array(self.model.crf.decode(slot_logits))
         intent_preds = torch.argmax(intent_logits.detach(), axis=1)
         # slot_preds = slot_logits.detach().cpu().numpy().tolist()
-        slot_preds =  [torch.argmax(slot_pred, axis=1) for slot_pred in slot_logits.detach()]
+        slot_preds_list = [torch.argmax(slot_pred, axis=1) for slot_pred in slot_logits.detach()]
+        slot_preds = torch.stack(slot_preds_list, dim=0)
         # slot_preds = (self.model.crf.decode(slot_logits))
         # return intent_preds, slot_preds
         return intent_preds, slot_preds
@@ -63,7 +64,7 @@ parser.add_argument("--slot_label_file", default="/home/sangdt/research/JointBer
 parser.add_argument("--dropout_rate", default=0.1, type=float, help="Dropout for fully-connected layers")
 parser.add_argument("--ignore_index", default=1, type=int,
                     help='Specifies a target value that is ignored and does not contribute to the input gradient')
-parser.add_argument("--do_infer", action='store_false')
+# parser.add_argument("--do_infer", action='store_false')
 parser.add_argument('--slot_loss_coef', type=float, default=1.0, help='Coefficient for the slot loss.')
 
 # CRF option
@@ -79,7 +80,7 @@ ckpt = "./onnx/"
 onnx_path = "./onnx/model.onnx"
 tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
 
-dummy_inputs = tokenizer(["customer service"], add_special_tokens=True, truncation=True, return_tensors="pt")
+dummy_inputs = tokenizer(["customer service", "I booked something"], add_special_tokens=True, truncation=True, return_tensors="pt", padding=True)
 
 dummy_inputs["input_ids"] = dummy_inputs['input_ids'].to(device)
 dummy_inputs["attention_mask"] = dummy_inputs['attention_mask'].to(device)
@@ -91,21 +92,22 @@ model_base = JointRoberta.from_pretrained(args.model_dir, args, intent_label_lst
 
 model = JointRobertaWrapper(model_base)
 
-intent_preds, slot_preds = model(**dummy_inputs)
-intention =  [dict_intents[i] for i in intent_preds][0]
-tmp_slots = [dict_tags[i] for i in slot_preds[0]]
-slots = post_processing(dummy_inputs['input_ids'][0], tmp_slots)
+# intent_preds, slot_preds = model(**dummy_inputs)
+# intention =  [dict_intents[i] for i in intent_preds][0]
+# tmp_slots = [dict_tags[i] for i in slot_preds[0]]
+# slots = post_processing(dummy_inputs['input_ids'][0], tmp_slots)
 
 # # export
-# torch.onnx.export(
-#     model, 
-#     tuple([dummy_inputs["input_ids"], dummy_inputs["attention_mask"]]),
-#     f="./ckpt/model_test.onnx",  
-#     verbose=True,
-#     input_names=['input_ids', 'attention_mask'], 
-#     # output_names=['intent_preds', 'slot_preds'], 
-#     # dynamic_axes={'input_ids': {0: 'batch_size', 1: 'max_length'}, 
-#     #               'attention_mask': {0: 'batch_size', 1: 'max_length'}, 
-#     #               }, 
-#     do_constant_folding=True, 
-# )
+torch.onnx.export(
+    model, 
+    tuple([dummy_inputs["input_ids"], dummy_inputs["attention_mask"]]),
+    f="./ckpt_no_crf/model.onnx",  
+    verbose=True,
+    input_names=['input_ids', 'attention_mask'], 
+    output_names=['intent_preds', 'slot_preds'], 
+    dynamic_axes={'input_ids': {0: 'batch_size', 1: 'max_length'}, 
+                  'attention_mask': {0: 'batch_size', 1: 'max_length'},
+                  'intent_preds': {0: 'batch_size'},
+                  'slot_preds': {0: 'batch_size', 1: 'max_length'}},
+    do_constant_folding=True, 
+)
