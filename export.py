@@ -19,16 +19,51 @@ from utils import get_intent_labels, get_slot_labels
 import argparse
 import numpy as np
 
+def post_processing(input_ids, slots):
+    list_tokens = tokenizer.convert_ids_to_tokens(input_ids)
+    list_index_g = [index for index, i in enumerate(list_tokens) if 'Ġ' in i]
+    list_index_g = [1] + list_index_g
+    raw_slots = []
+    for index, token in enumerate(list_tokens):
+        if index in list_index_g:
+            raw_slots.append(slots[index])
+    return raw_slots
+
+class JointRobertaWrapper(torch.nn.Module):
+    """Class for wrap model"""
+   
+    def __init__(self, joint_roberta):
+        super().__init__()
+        self.model = joint_roberta
+
+    def forward(self, input_ids, attention_mask):
+        # intent_logits, slot_logits = self.model.predict(input_ids, attention_mask)  # sequence_output, pooler_output, (hidden_states), (attentions)
+        outputs = self.model.roberta(input_ids, attention_mask=attention_mask)  # sequence_output, pooler_output, (hidden_states), (attentions)
+        sequence_output = outputs[0]
+        pooler_output = outputs[1]  # ([<s>] (equivalent to [CLS])
+
+        intent_logits = self.model.intent_classifier(pooler_output)
+        slot_logits = self.model.slot_classifier(sequence_output)
+
+        # intent_preds = np.argmax(intent_logits.detach().cpu().numpy(), axis=1)
+        # slot_preds = np.array(self.model.crf.decode(slot_logits))
+        intent_preds = torch.argmax(intent_logits.detach(), axis=1)
+        # slot_preds = slot_logits.detach().cpu().numpy().tolist()
+        slot_preds =  [torch.argmax(slot_pred, axis=1) for slot_pred in slot_logits.detach()]
+        # slot_preds = (self.model.crf.decode(slot_logits))
+        # return intent_preds, slot_preds
+        return intent_preds, slot_preds
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--sentence", default="customer serice", required=False, type=str, help="Enter an input sentence")
-parser.add_argument("--model_dir", default="/home/sangdt/research/JointBert/ckpt", required=False, type=str, help="Path to save, load model")
+parser.add_argument("--model_dir", default="/home/sangdt/research/JointBert/ckpt_no_crf", required=False, type=str, help="Path to save, load model")
 parser.add_argument("--intent_label_file", default="/home/sangdt/research/JointBert/processed_data/intent_label.txt", type=str, help="Intent Label file")
 parser.add_argument("--slot_label_file", default="/home/sangdt/research/JointBert/processed_data/slot_label.txt", type=str, help="Slot Label file")
 parser.add_argument("--dropout_rate", default=0.1, type=float, help="Dropout for fully-connected layers")
 parser.add_argument("--ignore_index", default=1, type=int,
                     help='Specifies a target value that is ignored and does not contribute to the input gradient')
-
+parser.add_argument("--do_infer", action='store_false')
 parser.add_argument('--slot_loss_coef', type=float, default=1.0, help='Coefficient for the slot loss.')
 
 # CRF option
@@ -40,29 +75,37 @@ args = parser.parse_args()
 
 
 device = torch.device("cuda")
-ckpt = "./checkpoints/"
-onnx_path = "./checkpoints/model.onnx"
+ckpt = "./onnx/"
+onnx_path = "./onnx/model.onnx"
 tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
 
-dummy_model_input = tokenizer(["customer service", "I want to book this hotel"], padding='max_length', truncation=True, return_tensors="pt")
+dummy_inputs = tokenizer(["customer service"], add_special_tokens=True, truncation=True, return_tensors="pt")
 
-input_ids = dummy_model_input['input_ids'].to(device)
-attention_mask = dummy_model_input['attention_mask'].to(device)
+dummy_inputs["input_ids"] = dummy_inputs['input_ids'].to(device)
+dummy_inputs["attention_mask"] = dummy_inputs['attention_mask'].to(device)
 intent_label_lst = get_intent_labels(args)
 dict_intents = {i: intent for i, intent in enumerate(intent_label_lst)}
 slot_label_lst = get_slot_labels(args)
 dict_tags = {i: tag for i, tag in enumerate(slot_label_lst)}
-model = JointRoberta.from_pretrained(args.model_dir, args, intent_label_lst=intent_label_lst, slot_label_lst=slot_label_lst).to(device)
-# export
-torch.onnx.export(
-    model, 
-    tuple([input_ids, attention_mask]),
-    f="./ckpt/model_test.onnx",  
-    verbose=True,
-    input_names=['input_ids', 'attention_mask'], 
-    output_names=['outputs'], 
-    dynamic_axes={'input_ids': {0: 'batch_size', 1: 'max_length'}, 
-                  'attention_mask': {0: 'batch_size', 1: 'max_length'}, 
-                  'outputs': {0: 'batch_size'}}, 
-    do_constant_folding=True, 
-)
+model_base = JointRoberta.from_pretrained(args.model_dir, args, intent_label_lst=intent_label_lst, slot_label_lst=slot_label_lst).to(device)
+
+model = JointRobertaWrapper(model_base)
+
+intent_preds, slot_preds = model(**dummy_inputs)
+intention =  [dict_intents[i] for i in intent_preds][0]
+tmp_slots = [dict_tags[i] for i in slot_preds[0]]
+slots = post_processing(dummy_inputs['input_ids'][0], tmp_slots)
+
+# # export
+# torch.onnx.export(
+#     model, 
+#     tuple([dummy_inputs["input_ids"], dummy_inputs["attention_mask"]]),
+#     f="./ckpt/model_test.onnx",  
+#     verbose=True,
+#     input_names=['input_ids', 'attention_mask'], 
+#     # output_names=['intent_preds', 'slot_preds'], 
+#     # dynamic_axes={'input_ids': {0: 'batch_size', 1: 'max_length'}, 
+#     #               'attention_mask': {0: 'batch_size', 1: 'max_length'}, 
+#     #               }, 
+#     do_constant_folding=True, 
+# )
