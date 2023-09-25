@@ -6,6 +6,7 @@ import argparse
 import numpy as np
 
 def post_processing(input_ids, slots):
+    # input_ids: torch.size(5), slots: list(5)
     list_tokens = tokenizer.convert_ids_to_tokens(input_ids)
     list_index_g = [index for index, i in enumerate(list_tokens) if 'Ġ' in i]
     list_index_g = [1] + list_index_g
@@ -23,7 +24,9 @@ def infer(sentence, tokenizer, model, dict_intents, dict_tags, device):
         outputs = model.predict(**inputs)
         intent_logits, slot_logits = outputs
         intent_preds = np.argmax(intent_logits.detach().cpu().numpy(), axis=1).tolist()
+        # shape: (1,30)
         slot_preds = np.array(model.crf.decode(slot_logits)).tolist()
+        # len: 5
     intention =  [dict_intents[i] for i in intent_preds][0]
     tmp_slots = [dict_tags[i] for i in slot_preds[0]]
     slots = post_processing(inputs['input_ids'][0], tmp_slots)
@@ -37,8 +40,8 @@ def infer(sentence, tokenizer, model, dict_intents, dict_tags, device):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--sentence", default=None, required=True, type=str, help="Enter an input sentence")
-    parser.add_argument("--model_dir", default=None, required=True, type=str, help="Path to save, load model")
+    parser.add_argument("--sentence", default=None, type=str, help="Enter an input sentence")
+    parser.add_argument("--model_dir", default="/home/sangdt/research/JointBert/ckpt", type=str, help="Path to save, load model")
     parser.add_argument("--intent_label_file", default="./processed_data/intent_label.txt", type=str, help="Intent Label file")
     parser.add_argument("--slot_label_file", default="./processed_data/slot_label.txt", type=str, help="Slot Label file")
     parser.add_argument("--dropout_rate", default=0.1, type=float, help="Dropout for fully-connected layers")
@@ -48,7 +51,7 @@ if __name__ == '__main__':
     parser.add_argument('--slot_loss_coef', type=float, default=1.0, help='Coefficient for the slot loss.')
 
     # CRF option
-    parser.add_argument("--use_crf", action="store_true", help="Whether to use CRF")
+    parser.add_argument("--use_crf", action="store_false", help="Whether to use CRF")
     parser.add_argument("--slot_pad_label", default="PAD", type=str, help="Pad token for slot label pad (to be ignore when calculate loss)")
 
     args = parser.parse_args()

@@ -40,8 +40,6 @@ args = parser.parse_args()
 
 
 device = torch.device("cuda")
-ckpt = "./checkpoints/"
-onnx_path = "./checkpoints/model.onnx"
 tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
 
 dummy_model_input = tokenizer(["customer service", "I want to book this hotel"], padding='max_length', truncation=True, return_tensors="pt")
@@ -58,12 +56,12 @@ model.eval()
 torch.onnx.export(
     model, 
     tuple([input_ids, attention_mask]),
-    f="./ckpt/model_test.onnx",  
+    f="./ckpt_test/model_test.onnx",  
     verbose=True,
     input_names=['input_ids', 'attention_mask'], 
-    output_names=['outputs'], 
+    output_names=['intent_logits', 'slot_logits'], 
     dynamic_axes={'input_ids': {0: 'batch_size', 1: 'max_length'}, 
                   'attention_mask': {0: 'batch_size', 1: 'max_length'}, 
-                  'outputs': {0: 'batch_size'}}, 
+                  'intent_logits': {0: 'batch_size'}}, 
     do_constant_folding=True, 
 )

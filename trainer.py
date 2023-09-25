@@ -163,7 +163,7 @@ class Trainer(object):
                 # 1. Intent Softmax
                 if intent_label_ids is not None:
                     if self.model.num_intent_labels == 1:
-                        intent_loss_fct = nn.MSELoss()
+                        intent_loss_fct = torch.nn.MSELoss()
                         intent_loss = intent_loss_fct(intent_logits.view(-1), intent_label_ids.view(-1))
                     else:
                         intent_loss_fct = torch.nn.CrossEntropyLoss()

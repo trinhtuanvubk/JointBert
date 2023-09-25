@@ -63,13 +63,17 @@ class JointRoberta(RobertaPreTrainedModel):
     #     return outputs  # (loss), logits, (hidden_states), (attentions) # Logits is a tuple of intent and slot logits
     
 
-    def forward(self, input_ids, attention_mask):
+    def forward(self, input_ids, attention_mask, slot_labels_ids):
         outputs = self.roberta(input_ids, attention_mask=attention_mask)  # sequence_output, pooler_output, (hidden_states), (attentions)
         sequence_output = outputs[0]
         pooler_output = outputs[1]  # ([<s>] (equivalent to [CLS])
 
         intent_logits = self.intent_classifier(pooler_output)
         slot_logits = self.slot_classifier(sequence_output)
+        slot_loss = self.crf(slot_logits, slot_labels_ids, mask=attention_mask.byte(), reduction='mean')
+        slot_loss = -1 * slot_loss  # negative log-likelihood
+
+        
 
         # total_loss = 0
         # # 1. Intent Softmax
@@ -104,7 +108,7 @@ class JointRoberta(RobertaPreTrainedModel):
 
         # outputs = (total_loss,) + outputs
 
-        return intent_logits, slot_logits
+        return intent_logits, slot_logits, slot_loss
 
 
     def predict(self, input_ids, attention_mask):
@@ -115,4 +119,4 @@ class JointRoberta(RobertaPreTrainedModel):
         intent_logits = self.intent_classifier(pooler_output)
         slot_logits = self.slot_classifier(sequence_output)
 
-        return (intent_logits, slot_logits) 
+        return (intent_logits, slot_logits)
