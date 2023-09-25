@@ -218,7 +218,7 @@ class Trainer(object):
 
         # Slot result
         if not self.args.use_crf:
-            slot_preds =  [np.argmax(slot_pred, axis=2) for slot_pred in slot_preds]
+            slot_preds =  [np.argmax(slot_pred, axis=1) for slot_pred in slot_preds]
         slot_label_map =  {i: label for i, label in enumerate(self.slot_label_lst)}
         out_slot_label_list = [[] for _ in range(len(self.test_dataset))]
         slot_preds_list = [[] for _ in range(len(self.test_dataset))]
