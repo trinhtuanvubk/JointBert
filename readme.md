@@ -13,6 +13,8 @@ pip3 install -r requirements.txt
 - A line sample in each file: 
 '{"text": "to make a payment", "tokens": ["to", "make", "a", "payment"], "intention": "payment", "slots": ["O", "O", "O", "B-PAYMENT"]}'
 
+- Preprocessing: Because using roberta's tokenizer will split the string into subwords differently than using space, we need to convert from token splitted by space to token splitted by Roberta's tokenizer. For example: ["customer",  "service"] (tokenized by space) -> ["custom", "er", "Ġservice"] (tokenized by roberta's tokenizer). So, this example would have the tag sequence as ["B-CUSTOMER", I-CUSTOMER", "B-SERVICE"] instead of ["B-CUSTOMER", "B-SERVICE"]. After training, at inference time, we map from tag sequence ["B-CUSTOMER", I-CUSTOMER", "B-SERVICE"] to ["B-CUSTOMER", "B-SERVICE"]. The preprocessing code is the `transform` function at `trainer.py`
+
 ### Training
 
 - To train:
