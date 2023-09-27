@@ -7,7 +7,7 @@ import torch
 from torch.utils.data import DataLoader
 from transformers.models.roberta.modeling_roberta import RobertaConfig
 from transformers import AdamW, get_linear_schedule_with_warmup
-from utils import MODEL_CLASSES, compute_metrics, get_intent_labels, get_slot_labels, load_tokenizer
+from utils.util import MODEL_CLASSES, compute_metrics, get_intent_labels, get_slot_labels, load_tokenizer
 
 
 logger = logging.getLogger(__name__)

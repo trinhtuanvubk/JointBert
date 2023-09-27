@@ -1,7 +1,7 @@
 import argparse
 import json
 from trainer import Trainer
-from utils import init_logger, load_tokenizer, set_seed, MODEL_CLASSES, MODEL_PATH_MAP
+from utils.util import init_logger, load_tokenizer, set_seed, MODEL_CLASSES, MODEL_PATH_MAP
 
 
 def main(args):

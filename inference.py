@@ -4,6 +4,7 @@ import torch
 from utils import get_intent_labels, get_slot_labels 
 import argparse
 import numpy as np
+from crf_decode import decode
 
 def post_processing(input_ids, slots):
     list_raw_slots = []
@@ -19,17 +20,14 @@ def post_processing(input_ids, slots):
     return list_raw_slots
 
 def infer(sentences, tokenizer, model, dict_intents, dict_tags, device):
-    if isinstance(sentences, str):
-        sentences = [sentences]
     inputs = tokenizer([sent.strip() for sent in sentences], add_special_tokens=True, return_tensors='pt', padding=True, truncation=True)
     inputs['input_ids'] = inputs['input_ids'].to(device)
     inputs['attention_mask'] = inputs['attention_mask'].to(device)
     with torch.no_grad():
-        outputs = model.predict(**inputs)
-        intent_logits, slot_logits = outputs
+        intent_logits, slot_logits, num_tags, transitions, start_transitions, end_transitions = model(**inputs)
+        # Shape: (1,30), (1, 9, 215), 215, (215,215), (215), (215)
         intent_preds = np.argmax(intent_logits.detach().cpu().numpy(), axis=1).tolist()
-        # slot_preds = np.array(model.crf.decode(slot_logits)).tolist()
-        slot_preds =  [np.argmax(slot_pred, axis=1) for slot_pred in slot_logits.detach().cpu().numpy()]
+        slot_preds = np.array(decode(slot_logits, num_tags, transitions, start_transitions, end_transitions)).tolist()
     intention =  [dict_intents[i] for i in intent_preds]
     tmp_slots = [[dict_tags[i] for i in slot_pred] for slot_pred in slot_preds]
     slots = post_processing(inputs['input_ids'], tmp_slots)
@@ -40,12 +38,11 @@ def infer(sentences, tokenizer, model, dict_intents, dict_tags, device):
     } for sentence, intention, slot in zip(sentences, intention, slots)]
     
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--sentence", default=None, required=True, type=str, help="Enter an input sentence")
-    parser.add_argument("--model_dir", default=None, required=True, type=str, help="Path to save, load model")
+    parser.add_argument("--sentence", default=None, type=str, help="Enter an input sentence")
+    parser.add_argument("--model_dir", default="/home/sangdt/research/JointBert_backup/ckpt", type=str, help="Path to save, load model")
     parser.add_argument("--intent_label_file", default="./processed_data/intent_label.txt", type=str, help="Intent Label file")
     parser.add_argument("--slot_label_file", default="./processed_data/slot_label.txt", type=str, help="Slot Label file")
     parser.add_argument("--dropout_rate", default=0.1, type=float, help="Dropout for fully-connected layers")
@@ -55,7 +52,7 @@ if __name__ == '__main__':
     parser.add_argument('--slot_loss_coef', type=float, default=1.0, help='Coefficient for the slot loss.')
 
     # CRF option
-    parser.add_argument("--use_crf", action="store_true", help="Whether to use CRF")
+    parser.add_argument("--use_crf", action="store_false", help="Whether to use CRF")
     parser.add_argument("--slot_pad_label", default="PAD", type=str, help="Pad token for slot label pad (to be ignore when calculate loss)")
 
     args = parser.parse_args()
@@ -69,5 +66,5 @@ if __name__ == '__main__':
     model = JointRoberta.from_pretrained(args.model_dir, args, intent_label_lst=intent_label_lst, slot_label_lst=slot_label_lst).to(device)
     tokenizer = RobertaTokenizer.from_pretrained("roberta-base")
 
-    result = infer(['customer service', 'I want to book this hotel'], tokenizer, model, dict_intents, dict_tags, device)
+    result = infer(['I want to using cash to pay', 'customer service'], tokenizer, model, dict_intents, dict_tags, device)
     print(result)

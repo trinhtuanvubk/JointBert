@@ -4,9 +4,10 @@ import numpy as np
 
 from transformers import RobertaTokenizer
 import torch
-from utils import get_intent_labels, get_slot_labels 
+from utils.util import get_intent_labels, get_slot_labels 
+from utils.crf_decode import decode
 import argparse
-import numpy as np
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--sentence", default="customer serice", required=False, type=str, help="Enter an input sentence")
@@ -53,7 +54,7 @@ onnx_inputs = {'input_ids': np.array(inputs['input_ids']),
                'attention_mask': np.array(inputs['attention_mask'])}
 # ============================================================================
 
-model_path = "/home/sangdt/research/JointBert/ckpt_no_crf/model.onnx"
+model_path = "/home/sangdt/research/JointBert/ckpt_alg/model.onnx"
 sess = onnxruntime.InferenceSession(model_path, providers=['CUDAExecutionProvider'])
 
 inputs_name = [x.name for x in sess.get_inputs()]
@@ -65,12 +66,14 @@ outputs_shape = [x.shape for x in sess.get_outputs()]
 print(inputs_name, inputs_shape)
 print(outputs_name, outputs_shape)
 
-intent_preds, slot_preds = sess.run(outputs_name, onnx_inputs)
+intent_logits, slot_logits, transitions, start_transition, end_transition = sess.run(outputs_name, onnx_inputs)
 
 
 # ============================================================================
-intention =  [dict_intents[i] for i in intent_preds.tolist()]
-tmp_slots = [[dict_tags[i] for i in slot_pred.tolist()] for slot_pred in slot_preds]
+intent_preds = np.argmax(intent_logits, axis=1).tolist()
+slot_preds = np.array(decode(slot_logits, transitions, start_transition, end_transition)).tolist()
+intention =  [dict_intents[i] for i in intent_preds]
+tmp_slots = [[dict_tags[i] for i in slot_pred] for slot_pred in slot_preds]
 slots = post_processing(inputs['input_ids'], tmp_slots)
 
 

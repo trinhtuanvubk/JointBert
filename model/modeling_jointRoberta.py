@@ -19,7 +19,7 @@ class JointRoberta(RobertaPreTrainedModel):
         if args.use_crf:
             self.crf = CRF(num_tags=self.num_slot_labels, batch_first=True)
 
-    def forward(self, input_ids, attention_mask, token_type_ids, intent_label_ids, slot_labels_ids):
+    def _forward_alg(self, input_ids, attention_mask, token_type_ids, intent_label_ids, slot_labels_ids):
         outputs = self.roberta(input_ids, attention_mask=attention_mask)  # sequence_output, pooler_output, (hidden_states), (attentions)
         sequence_output = outputs[0]
         pooler_output = outputs[1]  # ([<s>] (equivalent to [CLS])
@@ -62,12 +62,13 @@ class JointRoberta(RobertaPreTrainedModel):
 
         return outputs  # (loss), logits, (hidden_states), (attentions) # Logits is a tuple of intent and slot logits
         
-    def predict(self, input_ids, attention_mask):
-        outputs = self.roberta(input_ids, attention_mask=attention_mask)  # sequence_output, pooler_output, (hidden_states), (attentions)
+    def forward(self, input_ids, attention_mask):
+        outputs = self.roberta(input_ids, attention_mask)  # sequence_output, pooler_output, (hidden_states), (attentions)
         sequence_output = outputs[0]
         pooler_output = outputs[1]  # ([<s>] (equivalent to [CLS])
 
         intent_logits = self.intent_classifier(pooler_output)
         slot_logits = self.slot_classifier(sequence_output)
 
-        return (intent_logits, slot_logits) 
+        return (intent_logits, slot_logits, self.crf.transitions.data, self.crf.start_transitions.data, self.crf.end_transitions.data)
+
