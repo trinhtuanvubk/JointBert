@@ -118,7 +118,7 @@ class Trainer(object):
                         'intent_label_ids': batch[3],
                         'slot_labels_ids': batch[2],
                         'token_type_ids': batch[4]}
-                outputs = self.model(**inputs)
+                outputs = self.model._forward_alg(**inputs)
                 loss = outputs[0]
 
                 if self.args.gradient_accumulation_steps > 1:
@@ -176,7 +176,7 @@ class Trainer(object):
                             'intent_label_ids': batch[3],
                             'slot_labels_ids': batch[2],
                             'token_type_ids': batch[4]}
-                outputs = self.model(**inputs)
+                outputs = self.model._forward_alg(**inputs)
                 tmp_eval_loss, (intent_logits, slot_logits) = outputs[:2]
 
                 eval_loss += tmp_eval_loss.mean().item()

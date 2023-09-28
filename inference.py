@@ -1,10 +1,10 @@
 from model import JointRoberta
 from transformers import RobertaTokenizer
 import torch
-from utils import get_intent_labels, get_slot_labels 
+from utils.util import get_intent_labels, get_slot_labels 
 import argparse
 import numpy as np
-from crf_decode import decode
+from utils.crf_decode import decode
 
 def post_processing(input_ids, slots):
     list_raw_slots = []
@@ -24,10 +24,10 @@ def infer(sentences, tokenizer, model, dict_intents, dict_tags, device):
     inputs['input_ids'] = inputs['input_ids'].to(device)
     inputs['attention_mask'] = inputs['attention_mask'].to(device)
     with torch.no_grad():
-        intent_logits, slot_logits, num_tags, transitions, start_transitions, end_transitions = model(**inputs)
+        intent_logits, slot_logits, transitions, start_transitions, end_transitions = model(**inputs)
         # Shape: (1,30), (1, 9, 215), 215, (215,215), (215), (215)
         intent_preds = np.argmax(intent_logits.detach().cpu().numpy(), axis=1).tolist()
-        slot_preds = np.array(decode(slot_logits, num_tags, transitions, start_transitions, end_transitions)).tolist()
+        slot_preds = np.array(decode(slot_logits, transitions, start_transitions, end_transitions)).tolist()
     intention =  [dict_intents[i] for i in intent_preds]
     tmp_slots = [[dict_tags[i] for i in slot_pred] for slot_pred in slot_preds]
     slots = post_processing(inputs['input_ids'], tmp_slots)
@@ -42,7 +42,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--sentence", default=None, type=str, help="Enter an input sentence")
-    parser.add_argument("--model_dir", default="/home/sangdt/research/JointBert_backup/ckpt", type=str, help="Path to save, load model")
+    parser.add_argument("--model_dir", default="/home/sangdt/research/JointBert/ckpt_alg", type=str, help="Path to save, load model")
     parser.add_argument("--intent_label_file", default="./processed_data/intent_label.txt", type=str, help="Intent Label file")
     parser.add_argument("--slot_label_file", default="./processed_data/slot_label.txt", type=str, help="Slot Label file")
     parser.add_argument("--dropout_rate", default=0.1, type=float, help="Dropout for fully-connected layers")
@@ -66,5 +66,7 @@ if __name__ == '__main__':
     model = JointRoberta.from_pretrained(args.model_dir, args, intent_label_lst=intent_label_lst, slot_label_lst=slot_label_lst).to(device)
     tokenizer = RobertaTokenizer.from_pretrained("roberta-base")
 
-    result = infer(['I want to using cash to pay', 'customer service'], tokenizer, model, dict_intents, dict_tags, device)
+    # result = infer(['I want to using cash to pay', 'customer service'], tokenizer, model, dict_intents, dict_tags, device)
+    result = infer([args.sentence], tokenizer, model, dict_intents, dict_tags, device)
+
     print(result)

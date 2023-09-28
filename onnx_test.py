@@ -11,7 +11,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--sentence", default="customer serice", required=False, type=str, help="Enter an input sentence")
-parser.add_argument("--model_dir", default="/home/sangdt/research/JointBert/ckpt_no_crf", required=False, type=str, help="Path to save, load model")
+parser.add_argument("--model_dir", default="/home/sangdt/research/JointBert/ckpt_alg", required=False, type=str, help="Path to save, load model")
 parser.add_argument("--intent_label_file", default="/home/sangdt/research/JointBert/processed_data/intent_label.txt", type=str, help="Intent Label file")
 parser.add_argument("--slot_label_file", default="/home/sangdt/research/JointBert/processed_data/slot_label.txt", type=str, help="Slot Label file")
 parser.add_argument("--dropout_rate", default=0.1, type=float, help="Dropout for fully-connected layers")
@@ -44,8 +44,8 @@ def post_processing(input_ids, slots):
         list_raw_slots.append(raw_slots)
     return list_raw_slots
 
-device = torch.device("cpu")
-sentences = ["I hit a customer", "I would make a complaint"]
+device = torch.device("cuda")
+sentences = ["I hit a customer", "I want to recharge my number"]
 inputs = tokenizer([sent.strip() for sent in sentences], add_special_tokens=True, return_tensors='pt', padding=True, truncation=True)
 # inputs['input_ids'] = inputs['input_ids'].to(device)
 # inputs['attention_mask'] = inputs['attention_mask'].to(device)
@@ -54,7 +54,7 @@ onnx_inputs = {'input_ids': np.array(inputs['input_ids']),
                'attention_mask': np.array(inputs['attention_mask'])}
 # ============================================================================
 
-model_path = "/home/sangdt/research/JointBert/ckpt_alg/model.onnx"
+model_path = "/home/sangdt/research/JointBert/ckpt/model.onnx"
 sess = onnxruntime.InferenceSession(model_path, providers=['CUDAExecutionProvider'])
 
 inputs_name = [x.name for x in sess.get_inputs()]

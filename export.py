@@ -62,7 +62,7 @@ class JointRobertaWrapper(torch.nn.Module):
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--sentence", default="customer service", required=False, type=str, help="Enter an input sentence")
-parser.add_argument("--model_dir", default="/home/sangdt/research/JointBert/ckpt_alg", required=False, type=str, help="Path to save, load model")
+parser.add_argument("--model_dir", default="/home/sangdt/research/JointBert/ckpt", required=False, type=str, help="Path to save, load model")
 parser.add_argument("--intent_label_file", default="/home/sangdt/research/JointBert/processed_data/intent_label.txt", type=str, help="Intent Label file")
 parser.add_argument("--slot_label_file", default="/home/sangdt/research/JointBert/processed_data/slot_label.txt", type=str, help="Slot Label file")
 parser.add_argument("--dropout_rate", default=0.1, type=float, help="Dropout for fully-connected layers")
@@ -105,7 +105,7 @@ model = JointRobertaWrapper(model_base)
 torch.onnx.export(
     model, 
     tuple([dummy_inputs["input_ids"], dummy_inputs["attention_mask"]]),
-    f="./ckpt_alg/model.onnx",  
+    f="./ckpt/model.onnx",  
     verbose=True,
     input_names=['input_ids', 'attention_mask'], 
     output_names=['intent_logits', 'slot_logits', 'transitions', 'start_transition', 'end_transition'], 
