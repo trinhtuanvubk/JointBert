@@ -31,6 +31,7 @@ intent_label_lst = get_intent_labels(args)
 dict_intents = {i: intent for i, intent in enumerate(intent_label_lst)}
 slot_label_lst = get_slot_labels(args)
 dict_tags = {i: tag for i, tag in enumerate(slot_label_lst)}
+
 def post_processing(input_ids, slots):
     list_raw_slots = []
     for index in range(input_ids.shape[0]):
@@ -67,7 +68,6 @@ print(inputs_name, inputs_shape)
 print(outputs_name, outputs_shape)
 
 intent_logits, slot_logits, transitions, start_transition, end_transition = sess.run(outputs_name, onnx_inputs)
-
 
 # ============================================================================
 intent_preds = np.argmax(intent_logits, axis=1).tolist()
