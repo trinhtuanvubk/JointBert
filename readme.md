@@ -37,3 +37,8 @@ CUDA_VISIBLE_DEVICES=1 python3 inference.py --sentence "customer service" --mode
 ```
 python3 export.py
 ```
+
+- To test onnx:
+```
+python3 onnx_test.py
+```
